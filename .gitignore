@@ -1,0 +1,5 @@
+config.json
+history.json
+*.tmp
+sealink.log
+__pycache__/
