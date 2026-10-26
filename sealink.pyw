@@ -8,6 +8,7 @@ read-only).
 import ctypes
 import fnmatch
 import json
+import locale
 import logging
 import os
 import queue
@@ -34,6 +35,34 @@ LOG_PATH = os.path.join(APP_DIR, "sealink.log")
 SEADRIVE_DB = os.path.expanduser(r"~\seadrive\accounts.db")
 SEADRIVE_SETTINGS = r"Software\SeaDrive\Seafile Drive Client\Settings"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+THEME_KEY = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+
+STRINGS = {
+    "en": {
+        "starting": "starting…", "connected": "connected", "reconnecting": "reconnecting…",
+        "error": "error (see log)", "copy_latest": "Copy latest link", "files": "Files:",
+        "folders": "Folders:", "none": "   (none)", "status": "Status: {}", "pause": "Pause",
+        "open_config": "Open config", "autostart": "Start with Windows", "quit": "Quit",
+        "copy": "Copy link", "open_online": "Open online", "show": "Show in Explorer",
+        "copied": "Link copied", "created": "Link created",
+    },
+    "it": {
+        "starting": "avvio…", "connected": "connesso", "reconnecting": "riconnessione…",
+        "error": "errore (vedi log)", "copy_latest": "Copia ultimo link", "files": "File:",
+        "folders": "Cartelle:", "none": "   (nessuno)", "status": "Stato: {}", "pause": "Pausa",
+        "open_config": "Apri config", "autostart": "Avvia con Windows", "quit": "Esci",
+        "copy": "Copia link", "open_online": "Apri online", "show": "Mostra in Explorer",
+        "copied": "Link copiato", "created": "Link creato",
+    },
+}
+
+
+def ui_language():
+    lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+    return locale.windows_locale.get(lcid, "en")[:2]
+
+
+T = STRINGS.get(ui_language(), STRINGS["en"])
 
 DEFAULT_CONFIG = {
     # empty = derived from the SeaDrive server URL (see notification_url())
@@ -184,7 +213,7 @@ class SeaLink:
         self.folders = hist.get("folders", [])
         self.last_commits = hist.get("last_commits", {})
         self.repos = {}
-        self.status = "starting…"
+        self.status = "starting"
         self.paused = False
         self.events = queue.Queue()
         self.ws = None
@@ -292,7 +321,7 @@ class SeaLink:
                 copy_to_clipboard(last["link"])
             if self.cfg["notify"] and self.icon:
                 more = f" (+{len(found) - 1})" if len(found) > 1 else ""
-                self.icon.notify(f"{last['name']}{more}", "Link copied" if self.cfg["auto_copy"] else "Link created")
+                self.icon.notify(f"{last['name']}{more}", T["copied"] if self.cfg["auto_copy"] else T["created"])
         if self.icon:
             self.icon.update_menu()
 
@@ -321,7 +350,7 @@ class SeaLink:
                 self.handle_commit(rid, cid)
             except Exception:
                 log.exception("commit error %s %s", rid, cid)
-                self.set_status("error (see log)")
+                self.set_status("error")
 
     # websocket -------------------------------------------------------------
     def subscribe(self, ws, repo_ids):
@@ -364,7 +393,7 @@ class SeaLink:
                     delay = 5
             except Exception:
                 log.exception("ws loop")
-            self.set_status("reconnecting…")
+            self.set_status("reconnecting")
             time.sleep(delay)
             delay = min(delay * 2, 300)
 
@@ -383,9 +412,21 @@ class SeaLink:
     # tray ------------------------------------------------------------------
     def set_status(self, s):
         self.status = s
+        self.refresh_icon()
+
+    def refresh_icon(self):
         if self.icon:
-            self.icon.icon = make_icon(s)
+            self.icon.icon = make_icon(self.status)
             self.icon.update_menu()
+
+    def theme_loop(self):
+        # woken by Windows only when the theme key changes, no polling
+        advapi = ctypes.windll.advapi32
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, THEME_KEY) as k:
+            while True:
+                advapi.RegNotifyChangeKeyValue(int(k), False, 0x4, None, False)  # LAST_SET
+                apply_menu_theme()
+                self.refresh_icon()
 
     def copy(self, entry):
         if entry:
@@ -400,27 +441,27 @@ class SeaLink:
 
     def entry_item(self, e):
         return pystray.MenuItem(e["name"], pystray.Menu(
-            pystray.MenuItem("Copy link", lambda: self.copy(e), default=True),
-            pystray.MenuItem("Open online", lambda: webbrowser.open(e["link"])),
-            pystray.MenuItem("Show in Explorer", lambda: self.open_explorer(e)),
+            pystray.MenuItem(T["copy"], lambda: self.copy(e), default=True),
+            pystray.MenuItem(T["open_online"], lambda: webbrowser.open(e["link"])),
+            pystray.MenuItem(T["show"], lambda: self.open_explorer(e)),
         ))
 
     def menu_items(self):
         n = self.cfg["menu_items"]
-        yield pystray.MenuItem("Copy latest link", lambda: self.copy(self.latest()),
+        yield pystray.MenuItem(T["copy_latest"], lambda: self.copy(self.latest()),
                                default=True, visible=False)
-        yield pystray.MenuItem("Files:", None, enabled=False)
+        yield pystray.MenuItem(T["files"], None, enabled=False)
         yield from (self.entry_item(e) for e in self.files[:n]) if self.files else \
-            [pystray.MenuItem("   (none)", None, enabled=False)]
-        yield pystray.MenuItem("Folders:", None, enabled=False)
+            [pystray.MenuItem(T["none"], None, enabled=False)]
+        yield pystray.MenuItem(T["folders"], None, enabled=False)
         yield from (self.entry_item(e) for e in self.folders[:n]) if self.folders else \
-            [pystray.MenuItem("   (none)", None, enabled=False)]
+            [pystray.MenuItem(T["none"], None, enabled=False)]
         yield pystray.Menu.SEPARATOR
-        yield pystray.MenuItem(f"Status: {self.status}", None, enabled=False)
-        yield pystray.MenuItem("Pause", self.toggle_pause, checked=lambda i: self.paused)
-        yield pystray.MenuItem("Open config", lambda: os.startfile(CONFIG_PATH))
-        yield pystray.MenuItem("Start with Windows", toggle_autostart, checked=lambda i: autostart_enabled())
-        yield pystray.MenuItem("Quit", lambda: self.icon.stop())
+        yield pystray.MenuItem(T["status"].format(T[self.status]), None, enabled=False)
+        yield pystray.MenuItem(T["pause"], self.toggle_pause, checked=lambda _: self.paused)
+        yield pystray.MenuItem(T["open_config"], lambda: os.startfile(CONFIG_PATH))
+        yield pystray.MenuItem(T["autostart"], toggle_autostart, checked=lambda _: autostart_enabled())
+        yield pystray.MenuItem(T["quit"], lambda: self.icon.stop())
 
     def toggle_pause(self):
         self.paused = not self.paused
@@ -428,23 +469,45 @@ class SeaLink:
     def run(self):
         self.icon = pystray.Icon("SeaLink", make_icon(self.status), "SeaLink",
                                  pystray.Menu(self.menu_items))
-        for target in (self.worker, self.ws_loop, self.resubscribe_loop):
+        apply_menu_theme()
+        for target in (self.worker, self.ws_loop, self.resubscribe_loop, self.theme_loop):
             threading.Thread(target=target, daemon=True).start()
         self.icon.run()
+
+
+def light_theme(value):
+    """value: 'SystemUsesLightTheme' (taskbar) or 'AppsUseLightTheme' (apps, menus)."""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, THEME_KEY) as k:
+            return bool(winreg.QueryValueEx(k, value)[0])
+    except OSError:
+        return False
+
+
+def apply_menu_theme():
+    # undocumented uxtheme exports (Windows 10 1903+), the same ones Explorer
+    # uses: 135 = SetPreferredAppMode (2 dark, 3 light), 136 = FlushMenuThemes
+    try:
+        ux = ctypes.WinDLL("uxtheme")
+        ux[135](3 if light_theme("AppsUseLightTheme") else 2)
+        ux[136]()
+    except (OSError, AttributeError):
+        pass
 
 
 def make_icon(status):
     if status == "connected":
         color = (46, 160, 67)
-    elif status.startswith(("starting", "reconnecting")):
+    elif status in ("starting", "reconnecting"):
         color = (200, 120, 0)
     else:
         color = (200, 40, 40)
+    ink = (32, 32, 32) if light_theme("SystemUsesLightTheme") else (255, 255, 255)
     img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     # two chain links
-    d.rounded_rectangle((4, 18, 38, 46), radius=14, outline=(255, 255, 255), width=7)
-    d.rounded_rectangle((26, 18, 60, 46), radius=14, outline=(255, 255, 255), width=7)
+    d.rounded_rectangle((4, 18, 38, 46), radius=14, outline=ink, width=7)
+    d.rounded_rectangle((26, 18, 60, 46), radius=14, outline=ink, width=7)
     d.ellipse((44, 44, 62, 62), fill=color)
     return img
 

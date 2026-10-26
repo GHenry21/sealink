@@ -13,6 +13,7 @@ No more digging through Explorer and right-clicking to get a link for the video 
 - **Reuses existing links** instead of creating duplicates. New links have no expiry and no password.
 - **Tray menu** with the last 5 files and the last 5 folders. Each one has *Copy link*, *Open online* and *Show in Explorer*. Left-clicking the tray icon copies the latest link.
 - **Catches up** on uploads that happened while SeaLink wasn't running.
+- **Follows Windows.** Uses the Windows display language (English and Italian for now, English otherwise) and the light/dark theme for both the tray icon and the menu, and updates live when you switch the theme.
 
 ```
 Files:
