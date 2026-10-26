@@ -1,0 +1,38 @@
+{
+  "notification_url": "",
+  "auto_copy": true,
+  "notify": true,
+  "menu_items": 5,
+  "history_size": 20,
+  "folder_quiet_minutes": 10,
+  "ignore_patterns": [
+    "*._0?_",
+    "*.[0-9]*.[0-9]*.m4v",
+    "*.[0-9]*.[0-9]*.aac",
+    "*.[0-9]*.[0-9]*.wav",
+    "*.tmp",
+    "*.temp",
+    "*.part",
+    "*.crdownload",
+    "~*",
+    ".~*",
+    "*.lock",
+    "*.prproj",
+    "*.prproj~*",
+    "*.pek",
+    "*.cfa",
+    "*.ims",
+    "*.xmp",
+    "Thumbs.db",
+    "desktop.ini",
+    ".DS_Store"
+  ],
+  "ignore_dirs": [
+    "Adobe Premiere Pro Auto-Save",
+    "CacheClip",
+    ".gallery",
+    "@Recycle"
+  ],
+  "include_paths": [],
+  "exclude_paths": []
+}

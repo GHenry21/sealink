@@ -52,7 +52,7 @@ To check it, open `http(s)://<notification url>/ping`: it should answer `{"ret":
 
 ## Configuration
 
-`config.json` is created next to the script on first run. You can open it from the tray menu (**Open config**); restart SeaLink after editing it.
+`config.json` is created next to the script on first run with the defaults below (the same as [`config.example.json`](config.example.json)). To customize before the first run, copy `config.example.json` to `config.json` and edit it. Keys you leave out fall back to the defaults. You can open the file from the tray menu (**Open config**); restart SeaLink after editing it.
 
 | Key | Default | Meaning |
 |---|---|---|
